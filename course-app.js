@@ -20,10 +20,17 @@
       .replace(/[.,;:!?'"`（）()，。；：！？、"'\/|]/g, ' ')
       .replace(/\s+/g, ' ').trim();
   };
-  var today = function () { return new Date().toISOString().slice(0, 10); };
+  var fmtDate = function (d) {
+    return d.getFullYear() + '-' +
+      ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  };
+  /* 一律用本地日历日计算，避免 toISOString() 在东八区把日期退回前一天 */
+  var today = function () { return fmtDate(new Date()); };
   var addDays = function (base, n) {
-    var d = new Date(base + 'T00:00:00'); d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    var p = String(base).split('-');
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    d.setDate(d.getDate() + n);
+    return fmtDate(d);
   };
 
   /* ---------------- 状态 ---------------- */
@@ -90,7 +97,10 @@
     var skills = {};
     rs.forEach(function (r) { if (passed(r) && !isVariant(r.id) && !isDiagnostic(r.id)) skills[r.skill] = true; });
     var c2 = C.skills.every(function (s) { return !!skills[s]; });
-    var wrongs = rs.filter(function (r) { return r.state === 'wrong' || r.state === 'attributed' || r.state === 'variant-pass' || r.state === 'mastered' || r.attribution; });
+    /* 只统计真正答错或已归因的记录；答对的变式题不计入归因分母 */
+    var wrongs = rs.filter(function (r) {
+      return r.state === 'wrong' || r.state === 'attributed' || !!r.attribution;
+    });
     var c3 = wrongs.length > 0 && wrongs.every(function (r) { return !!r.attribution; });
     var vr = rs.filter(function (r) { return isVariant(r.id) && (r.state === 'variant-pass' || r.state === 'mastered' || r.state === 'correct' || r.state === 'open-pass'); });
     var vAll = rs.filter(function (r) { return isVariant(r.id) && r.submitted; });
