@@ -320,6 +320,7 @@ ul.clean li { margin-bottom: 4px; }
 .ctable th, .ctable td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
 .ctable th { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
 .ctable.archive td { max-width: 220px; word-break: break-word; }
+.ctable tr.cur-row { background: var(--primary-soft); }
 .cell-edit { width: 100%; min-height: 44px; font-size: 11px; }
 .course-foot { border-top: 1px dashed var(--border); padding-top: 9px; }
 .course-foot .row { flex-wrap: wrap; gap: 6px; }

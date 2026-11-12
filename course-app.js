@@ -61,11 +61,17 @@
   function allItems(u) {
     return u.diagnostics.concat(u.items).concat(u.variants);
   }
+  function deepenItems() {
+    var D = window.COURSE_DEEPEN;
+    return D ? D.ladder.concat(D.mock.items) : [];
+  }
+  function isDeepenItem(id) { return /-L\d|^M-/.test(id || ''); }
   function findItem(id) {
     var found = null;
     C.units.forEach(function (u) {
       allItems(u).forEach(function (q) { if (q.id === id) found = q; });
     });
+    if (!found) deepenItems().forEach(function (q) { if (q.id === id) found = q; });
     return found;
   }
   function unitOfItem(id) {
@@ -73,6 +79,7 @@
     C.units.forEach(function (u) {
       allItems(u).forEach(function (q) { if (q.id === id) r = u.id; });
     });
+    if (!r) deepenItems().forEach(function (q) { if (q.id === id) r = q.unit || null; });
     return r;
   }
   function isVariant(id) { return /-B\d/.test(id); }
@@ -146,7 +153,7 @@
   }
 
   function writeRecord(q, payload, result, extra) {
-    var u = unit(unitOfItem(q.id));
+    var u = unit(unitOfItem(q.id)) || C.units[0];
     var old = S.records[q.id] || {};
     var record = {
       id: q.id, unit: u.id, skill: q.skill, wrong_family: q.family,
@@ -218,7 +225,7 @@
       if (isVariant(q.id)) {
         S.records[q.id].variant_result = '通过';
         S.records[q.id].state = 'variant-pass';
-        scheduleReviews(unit(unitOfItem(q.id)), q);
+        scheduleReviews(unit(unitOfItem(q.id)) || C.units[0], q);
         /* 回写原题的变式结果 */
         Object.keys(S.records).forEach(function (k) {
           if (S.records[k].variant === q.id) S.records[k].variant_result = '通过';
@@ -252,7 +259,8 @@
       { id: 'today', name: '今日任务' },
       { id: 'unit', name: '单元精练' },
       { id: 'review', name: '复现队列' },
-      { id: 'archive', name: '错因档案' }
+      { id: 'archive', name: '错因档案' },
+      { id: 'deepen', name: '内容深化' }
     ];
     if (S.role === 'teacher') tabs.push({ id: 'teacher', name: '教师复核' });
 
@@ -284,12 +292,15 @@
       (S.tab === 'unit' ? renderUnit(u) : '') +
       (S.tab === 'review' ? renderReview(u) : '') +
       (S.tab === 'archive' ? renderArchive(u) : '') +
+      (S.tab === 'deepen' ? renderDeepen(u) : '') +
       (S.tab === 'teacher' ? renderTeacher(u) : '') +
       '</div>' +
 
       '<div class="course-foot"><div class="row">' +
       '<button type="button" class="btn sm" data-cact="print" data-id="student">导出本单元题目 A4（学生版）</button>' +
       (S.role === 'teacher' ? '<button type="button" class="btn sm" data-cact="print" data-id="teacher">导出听力脚本 A4（教师版）</button>' : '') +
+      '<button type="button" class="btn sm" data-cact="print" data-id="deepen-student">导出深化包 A4（学生版）</button>' +
+      (S.role === 'teacher' ? '<button type="button" class="btn sm" data-cact="print" data-id="deepen-teacher">导出深化包 A4（教师版）</button>' : '') +
       '<button type="button" class="btn sm" data-cact="bulk">整卷提交（演示拆为单题）</button>' +
       '<button type="button" class="btn sm ghost" data-cact="reset">清空本机练习记录</button>' +
       '</div><p class="tiny muted" style="margin:6px 0 0">' + esc(C.meta.note) + '</p></div>' +
@@ -449,7 +460,7 @@
 
   function renderQuestion(q) {
     var r = rec(q.id);
-    var u = unit(unitOfItem(q.id));
+    var u = unit(unitOfItem(q.id)) || C.units[0];
     var fb = (u.feedback || []).filter(function (f) { return f.family === q.family; })[0] || {};
     var wrongLocked = r && r.state === 'wrong';
     var attributed = r && (r.state === 'attributed' || r.state === 'variant-pass' || r.state === 'mastered' || r.state === 'correct' || r.state === 'open-pass');
@@ -457,7 +468,7 @@
 
     var html = '<div class="q-panel" id="q-panel"><div class="q-panel-head"><div class="row wrap">' +
       '<span class="badge blue">' + esc(q.id) + '</span><span class="badge">' + esc(q.skill) + '</span>' +
-      '<span class="badge">' + esc(isDiagnostic(q.id) ? '诊断题' : (isVariant(q.id) ? '变式题 · L4 迁移级' : u.level + ' 精练')) + '</span>' +
+      '<span class="badge">' + esc(isDiagnostic(q.id) ? '诊断题' : (isVariant(q.id) ? '变式题 · L4 迁移级' : (q.level || u.level) + (isDeepenItem(q.id) ? ' 深化题' : ' 精练'))) + '</span>' +
       '<span class="tiny muted">错因族：' + esc(q.family) + '</span></div>' +
       '<button type="button" class="btn xs ghost" data-cact="close">收起</button></div>' +
       '<div class="q-stem big">' + esc(q.stem) + '</div>';
@@ -566,13 +577,158 @@
       '<div class="card"><h3>教师版听力脚本（不向学生展示）</h3><p class="small">' + esc(u.listeningScript) + '</p></div>';
   }
 
+  /* ---------------- 渲染：内容深化 ---------------- */
+  function renderDeepen(u) {
+    var D = window.COURSE_DEEPEN;
+    if (!D) return '<div class="card"><p class="small muted">深化数据未加载，请确认 course-deepen.js 已引入。</p></div>';
+    var isT = S.role === 'teacher';
+    var html = '<div class="card compact"><div class="between"><b class="small">课程内容深化包 · 六项纵向加深</b>' +
+      '<span class="tiny muted">承接 3 单元 60 题，不重复原题；深化题不计入单元完成六条件</span></div>' +
+      '<p class="tiny" style="margin:6px 0 0">' + esc(D.meta.note) + '</p></div>';
+
+    /* ① 选项级错因分支 */
+    var bs = D.branches.filter(function (b) { return b.unit === u.id; });
+    html += '<div class="card"><h3>① 选项级错因分支判定（单元 ' + esc(u.id) + '，供讲评回看）</h3>' +
+      (bs.length ? '<table class="ctable"><thead><tr><th>题号</th><th>选项</th><th>判定</th><th>错因族</th><th>依据要点</th><th>补救题</th></tr></thead><tbody>' +
+        bs.map(function (b) {
+          return b.options.map(function (o, i) {
+            return '<tr>' + (i === 0 ? '<td rowspan="' + b.options.length + '"><b>' + esc(b.qid) + '</b></td>' : '') +
+              '<td>' + esc(o.key) + '</td><td>' + (o.ok ? '<span class="badge good">✓</span>' : '<span class="badge red">✗</span>') + '</td>' +
+              '<td>' + esc(o.family) + '</td><td>' + esc(o.basis) + '</td><td>' + esc(o.remedy) + '</td></tr>';
+          }).join('');
+        }).join('') + '</tbody></table>' : '<p class="small muted">本单元无选择题分支。</p>') +
+      '<p class="tiny">同一题选两个以上干扰项时按「先语序、后时态」记主错因，归因栏只写主错因。</p></div>';
+
+    /* ② 四阶题组 */
+    var ls = D.ladder.filter(function (q) { return q.unit === u.id; });
+    html += '<div class="card"><div class="between"><h3>② L1→L4 四阶递进题组（单元 ' + esc(u.id) + '）</h3>' +
+      '<span class="tiny muted">点题号进入单题卡，复用归因锁定与四栏解析</span></div>' +
+      '<div class="row wrap">' + ls.map(function (q) { return miniRow(q); }).join('') + '</div>' +
+      '<table class="ctable"><thead><tr><th>维度</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th></tr></thead><tbody>' +
+      D.ladderGradient.map(function (g) {
+        return '<tr><td><b>' + esc(g.dim) + '</b></td><td>' + esc(g.L1) + '</td><td>' + esc(g.L2) + '</td><td>' + esc(g.L3) + '</td><td>' + esc(g.L4) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    /* ③ 作文量表 */
+    html += '<div class="card"><h3>③ 作文批改量表与升格示范（不代写范文）</h3>' +
+      '<table class="ctable"><thead><tr><th>维度</th><th>0 分</th><th>1 分</th><th>2 分</th><th>可观测判定</th></tr></thead><tbody>' +
+      D.rubric.dims.map(function (d) {
+        return '<tr><td><b>' + esc(d.name) + '</b></td><td>' + esc(d.s0) + '</td><td>' + esc(d.s1) + '</td><td>' + esc(d.s2) + '</td><td>' + esc(d.obs) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="tiny">通过线：' + esc(D.rubric.passLine) + '</p>' +
+      '<table class="ctable"><thead><tr><th>#</th><th>改前</th><th>改后</th><th>理由</th><th>归因句式</th></tr></thead><tbody>' +
+      D.rubric.upgrades.map(function (x, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + esc(x.before) + '</td><td>' + esc(x.after) + '</td><td>' + esc(x.reason) + '</td><td>' + esc(x.attr) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="tiny"><b>第 2 稿验收单</b></p><ul class="clean small muted">' +
+      D.rubric.secondDraft.map(function (x) { return '<li>☐ ' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+
+    /* ④ 听力精听标注 */
+    var sc = D.listening.scripts.filter(function (x) { return x.unit === u.id; })[0];
+    html += '<div class="card"><div class="between"><h3>④ 听力精听标注与分句脚本</h3>' +
+      '<span class="badge ' + (isT ? 'blue' : '') + '">' + (isT ? '教师版' : '学生版') + '</span></div>';
+    if (isT && sc) {
+      html += '<p class="small"><b>' + esc(sc.title) + '</b>（逐句标注，不向学生展示）</p>' +
+        '<table class="ctable"><thead><tr><th>句</th><th>原文</th><th>标注</th></tr></thead><tbody>' +
+        sc.sentences.map(function (s) {
+          return '<tr><td><b>' + esc(s.no) + '</b></td><td>' + esc(s.text) + '</td><td>' + esc(s.marks) + '</td></tr>';
+        }).join('') + '</tbody></table>' +
+        '<p class="tiny"><b>单句听写 12 句（教师朗读）</b></p><table class="ctable"><thead><tr><th>#</th><th>句子</th><th>考点</th></tr></thead><tbody>' +
+        D.listening.dictation.map(function (d) {
+          return '<tr><td>' + esc(d.id) + '</td><td>' + esc(d.sentence) + '</td><td>' + esc(d.point) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    } else {
+      html += '<p class="small muted">单句听写 12 句由教师朗读，题面不提前展示；学生只填三栏记录单。</p>' +
+        '<ul class="clean small muted">' + D.listening.dictation.map(function (d) {
+          return '<li>' + esc(d.id) + '　考点：' + esc(d.point) + '</li>';
+        }).join('') + '</ul>';
+    }
+    html += '<table class="ctable"><thead><tr>' + D.listening.recordSheet.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead>' +
+      '<tbody><tr>' + D.listening.recordSheet.map(function () { return '<td>　<br>　</td>'; }).join('') + '</tr></tbody></table></div>';
+
+    /* ⑤ 跨单元滚动复现 */
+    html += '<div class="card"><h3>⑤ W01–W08 跨单元滚动复现表</h3>' +
+      '<table class="ctable"><thead><tr><th>周次</th><th>九上同步载体</th><th>复现错因族</th><th>换境方式</th><th>载体题号</th><th>通过判定</th></tr></thead><tbody>' +
+      D.spiral.map(function (s) {
+        return '<tr' + (s.week === 'W0' + u.week ? ' class="cur-row"' : '') + '><td><b>' + esc(s.week) + '</b></td><td>' + esc(s.carrier) + '</td>' +
+          '<td>' + esc(s.families) + '</td><td>' + esc(s.transfer) + '</td><td>' + esc(s.items) + '</td><td>' + esc(s.pass) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="tiny">同错因第 3 次错不升级，改派 L1 降级题并重新归因；连续 2 次复现正确且变式通过才晋级。</p></div>';
+
+    /* ⑥ 抽样模拟检测卷 */
+    var m = D.mock;
+    html += '<div class="card"><div class="between"><h3>⑥ 抽样模拟检测卷（原创示意，非全卷、非真题）</h3>' +
+      '<span class="tiny muted">按四板块各取代表题，用于分项诊断</span></div>';
+    if (isT) html += '<p class="small"><b>听力脚本（教师朗读）</b>：' + esc(m.listeningScript) + '</p>' +
+      '<p class="small"><b>阅读文本</b>：' + esc(m.readingText) + '</p>';
+    html += '<div class="row wrap">' + m.sections.map(function (sec) {
+      return '<div class="skill-row" style="flex:1 1 220px;display:block;border:0"><b class="small">' + esc(sec.block) + '（' + esc(sec.full) + ' 分示意）</b><div class="row wrap" style="margin-top:5px">' +
+        m.items.filter(function (q) { return q.block === sec.block; }).map(function (q) { return miniRow(q); }).join('') + '</div></div>';
+    }).join('') + '</div>';
+    if (isT) {
+      html += '<table class="ctable"><thead><tr><th>题号</th><th>答案</th><th>依据类型</th><th>具体依据</th><th>易错提醒</th></tr></thead><tbody>' +
+        m.analysis.map(function (a) {
+          return '<tr><td><b>' + esc(a.id) + '</b></td><td>' + esc(a.answer) + '</td><td>' + esc(a.type) + '</td><td>' + esc(a.basis) + '</td><td>' + esc(a.trap) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    } else {
+      html += '<p class="tiny">答案与四栏依据由教师端掌握；学生提交单题后按既有规则解锁解析。</p>';
+    }
+    html += '<table class="ctable"><thead><tr><th>板块</th><th>抽样题号</th><th>满分示意</th><th>得分</th><th>得分率</th><th>错因归类</th></tr></thead><tbody>' +
+      m.sections.map(function (sec) {
+        return '<tr><td>' + esc(sec.block) + '</td><td>' + esc(sec.ids) + '</td><td>' + esc(sec.full) + '</td><td>　</td><td>　</td><td>' + esc(sec.families) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="tiny">只报分项得分率，不报总分排名、不承诺分数；省卷题型分值以官方真题卷为准【待核实】。</p></div>';
+
+    /* 深化题的单题卡 */
+    var active = S.active ? findItem(S.active) : null;
+    if (active && isDeepenItem(active.id)) html += renderQuestion(active);
+    return html;
+  }
+
   /* ---------------- 打印 ---------------- */
   function doPrint(kind) {
     var u = unit();
     var box = $('course-print-root');
     if (!box) { box = document.createElement('div'); box.id = 'course-print-root'; document.body.appendChild(box); }
     var lines = '';
-    if (kind === 'teacher') {
+    var D = window.COURSE_DEEPEN;
+    if (kind === 'deepen-student' && D) {
+      var ls = D.ladder.filter(function (q) { return q.unit === u.id; });
+      lines = '<h2>内容深化 · 单元 ' + esc(u.id) + ' 四阶题组与抽样检测卷（学生版）</h2>' +
+        '<h3>一、L1→L4 四阶递进题组</h3><ol>' +
+        ls.map(function (q) { return '<li>[' + esc(q.level) + ' / ' + esc(q.limit) + '] ' + esc(q.stem) + '</li>'; }).join('') + '</ol>' +
+        '<h3>二、抽样模拟检测卷（原创示意，非真题）</h3><ol>' +
+        D.mock.items.map(function (q) { return '<li>' + esc(q.stem) + '</li>'; }).join('') + '</ol>' +
+        '<h3>三、单句听写三栏记录单</h3><p class="tiny">' + esc(D.listening.recordSheet.join(' ｜ ')) + '</p>' +
+        D.listening.dictation.map(function (d) { return '<p>' + esc(d.id) + '　____________________________________________</p>'; }).join('') +
+        '<h3>四、作文第 2 稿验收单</h3><ul>' +
+        D.rubric.secondDraft.map(function (x) { return '<li>☐ ' + esc(x) + '</li>'; }).join('') + '</ul>';
+    } else if (kind === 'deepen-teacher' && D) {
+      lines = '<h2>内容深化 · 教师版（答案、脚本与量表）</h2>' +
+        '<h3>一、四阶题组参考答案</h3><ul>' +
+        D.ladder.map(function (q) { return '<li><b>' + esc(q.id) + '</b> ' + esc(q.answer) + '｜' + esc(q.rule || '') + '</li>'; }).join('') + '</ul>' +
+        '<h3>二、抽样卷答案四栏</h3><table class="ctable"><thead><tr><th>题号</th><th>答案</th><th>依据类型</th><th>具体依据</th><th>易错提醒</th></tr></thead><tbody>' +
+        D.mock.analysis.map(function (a) {
+          return '<tr><td>' + esc(a.id) + '</td><td>' + esc(a.answer) + '</td><td>' + esc(a.type) + '</td><td>' + esc(a.basis) + '</td><td>' + esc(a.trap) + '</td></tr>';
+        }).join('') + '</tbody></table>' +
+        '<h3>三、听力脚本（逐句标注）</h3>' +
+        D.listening.scripts.map(function (s) {
+          return '<p><b>' + esc(s.title) + '</b></p><ul>' + s.sentences.map(function (x) {
+            return '<li>' + esc(x.no) + ' ' + esc(x.text) + '　【' + esc(x.marks) + '】</li>';
+          }).join('') + '</ul>';
+        }).join('') +
+        '<p><b>抽样卷听力脚本</b>：' + esc(D.mock.listeningScript) + '</p>' +
+        '<h3>四、选项级错因分支</h3><table class="ctable"><thead><tr><th>题号</th><th>选项</th><th>错因族</th><th>补救题</th></tr></thead><tbody>' +
+        D.branches.map(function (b) {
+          return b.options.map(function (o) {
+            return '<tr><td>' + esc(b.qid) + '</td><td>' + esc(o.key) + (o.ok ? ' ✓' : '') + '</td><td>' + esc(o.family) + '</td><td>' + esc(o.remedy) + '</td></tr>';
+          }).join('');
+        }).join('') + '</tbody></table>' +
+        '<h3>五、作文五维量表</h3><table class="ctable"><thead><tr><th>维度</th><th>0 分</th><th>1 分</th><th>2 分</th></tr></thead><tbody>' +
+        D.rubric.dims.map(function (d) {
+          return '<tr><td>' + esc(d.name) + '</td><td>' + esc(d.s0) + '</td><td>' + esc(d.s1) + '</td><td>' + esc(d.s2) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    } else if (kind === 'teacher') {
       lines = '<h2>单元 ' + esc(u.id) + ' 听力脚本（教师版）</h2><p>' + esc(u.listeningScript) + '</p>' +
         '<h3>参考答案与判定规则</h3><ul>' + allItems(u).map(function (q) {
           return '<li><b>' + esc(q.id) + '</b> ' + esc(q.answer) + (q.rule ? '｜' + esc(q.rule) : '') + '</li>';
@@ -586,7 +742,7 @@
         '<h3>六技能练习</h3><ol>' + u.items.map(function (q) { return '<li>[' + esc(q.skill) + '] ' + esc(q.stem) + '</li>'; }).join('') + '</ol>' +
         '<h3>变式题</h3><ol>' + u.variants.map(function (q) { return '<li>' + esc(q.stem) + '</li>'; }).join('') + '</ol>';
     }
-    box.innerHTML = '<div class="ph"><h2>英语中考学习台 · 错因任务流</h2><div class="line"><span>单元 ' + esc(u.id) + ' · ' + esc(kind === 'teacher' ? '教师版' : '学生版') + '</span><span>姓名：____________　日期：__________</span></div></div>' + lines;
+    box.innerHTML = '<div class="ph"><h2>英语中考学习台 · 错因任务流</h2><div class="line"><span>单元 ' + esc(u.id) + ' · ' + esc(kind === 'teacher' || kind === 'deepen-teacher' ? '教师版' : '学生版') + '</span><span>姓名：____________　日期：__________</span></div></div>' + lines;
     window.print();
   }
 
@@ -601,7 +757,7 @@
 
     if (act === 'unit') { S.unit = id; S.active = null; S.tab = 'today'; save(); render(); }
     else if (act === 'tab') { S.tab = id; save(); render(); }
-    else if (act === 'open') { S.active = id; S.tab = 'unit'; save(); render(); scrollToPanel(); }
+    else if (act === 'open') { S.active = id; S.tab = isDeepenItem(id) ? 'deepen' : 'unit'; save(); render(); scrollToPanel(); }
     else if (act === 'close') { S.active = null; save(); render(); }
     else if (act === 'submit') { var q = findItem(id); if (q) submit(q); }
     else if (act === 'attr') { var q2 = findItem(id); if (q2) submitAttribution(q2); }
