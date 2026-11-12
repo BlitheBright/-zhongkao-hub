@@ -115,8 +115,13 @@
     <section class="view" id="view-practice" aria-label="练测">
       <div class="view-head">
         <h2>练测</h2>
-        <p>分层练习、依据型答案解析、错题回炉、周六周测与模拟检测。</p>
+        <p>分层练习、依据型答案解析、错题回炉、周六周测与模拟检测；并承载错因驱动课程任务流。</p>
       </div>
+      <div class="practice-switch" id="practiceSwitch">
+        <button type="button" data-ptab="classic" class="active">分层练习</button>
+        <button type="button" data-ptab="course">错因任务流（课程单元 A / B / C）</button>
+      </div>
+      <div id="classicPractice">
       <div class="card">
         <div class="between">
           <div class="row">
@@ -143,6 +148,8 @@
           <p class="tiny" id="scoringNote" style="margin-top:8px"></p>
         </div>
       </div>
+      </div><!-- /classicPractice -->
+      <div id="courseRoot" class="hidden"></div>
     </section>
 
     <!-- 5 工具与交付 -->
@@ -227,6 +234,8 @@
 <div id="print-root" aria-hidden="true"></div>
 
 <script src="data.js"></script>
+<script src="course.js"></script>
 <script src="app.js"></script>
+<script src="course-app.js"></script>
 </body>
 </html>

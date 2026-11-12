@@ -375,6 +375,7 @@
     renderPractice();
     renderTools();
     renderTeacher();
+    try { window.dispatchEvent(new CustomEvent('zkeh:render')); } catch (e) { /* 旧浏览器忽略 */ }
   }
 
   /* ---------------- 10. 打印（A4 导出） ---------------- */
