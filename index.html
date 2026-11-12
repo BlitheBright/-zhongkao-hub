@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中考英语备考学习台</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <h1>中考英语备考学习台</h1>
+    <span>人教版（2024 修订版）九上 · 浙江杭州 · 120 分制 · 2027 届</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-tools">
+    <label class="small muted" for="weekSelect">当前周次</label>
+    <select id="weekSelect" aria-label="选择周次"></select>
+    <div class="segmented" id="roleSwitch" role="group" aria-label="视图切换">
+      <button type="button" data-role="student" class="active">学生端</button>
+      <button type="button" data-role="teacher">教师端</button>
+    </div>
+    <button type="button" class="btn primary" id="btnQuickPrint">导出本周听写条</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" aria-label="模块导航">
+    <div class="sidebar-label">六个功能区（设计稿边界）</div>
+    <button type="button" class="nav-btn active" data-view="nav"><span class="num">1</span>阶段导航</button>
+    <button type="button" class="nav-btn" data-view="books"><span class="num">2</span>课本同步</button>
+    <button type="button" class="nav-btn" data-view="topics"><span class="num">3</span>专题复习</button>
+    <button type="button" class="nav-btn" data-view="practice"><span class="num">4</span>练测</button>
+    <button type="button" class="nav-btn" data-view="tools"><span class="num">5</span>工具与交付</button>
+    <button type="button" class="nav-btn" data-view="teacher" id="navTeacher"><span class="num">6</span>教师维护</button>
+    <div class="nav-note" id="navNote">学生一进来只看当周；作文与模拟检测自 W02 起开放，C 层练习自 W17 起开放。</div>
+  </nav>
+
+  <main class="main">
+    <!-- 1 阶段导航 -->
+    <section class="view active" id="view-nav" aria-label="阶段导航">
+      <div class="view-head">
+        <h2>阶段导航</h2>
+        <p>31 周日历、四阶段、当周任务清单与进度勾选；默认只看当周。</p>
+      </div>
+      <div id="navNotice"></div>
+      <div class="grid grid-3">
+        <div class="card week-card">
+          <div class="between"><span class="small muted">当前周次</span><span class="badge blue" id="stageBadge"></span></div>
+          <div class="big" id="weekBig"></div>
+          <div class="small muted" id="weekDate"></div>
+          <p class="small" id="weekFocus"></p>
+          <div class="stage-pill" id="stagePill"></div>
+        </div>
+        <div class="card">
+          <h3>当周任务清单</h3>
+          <div id="taskList"></div>
+          <div class="between" style="margin-top:12px">
+            <span class="tiny" id="taskProgressText"></span>
+            <button type="button" class="btn sm" id="btnResetTasks">重置本周勾选</button>
+          </div>
+          <div class="progress-bar" style="margin-top:6px"><i id="taskProgressBar"></i></div>
+        </div>
+        <div class="card">
+          <h3>四大板块分项得分率</h3>
+          <p class="tiny" id="scoreHint">教师端可录入；学生端只看已录入结果。</p>
+          <div id="scoreBoard"></div>
+          <div id="scoreEditor"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="between"><h3 style="margin:0">31 周日历</h3><span class="tiny">点选任意周次可切换；不因此提前开放未到周的模块</span></div>
+        <div class="week-grid" id="weekGrid" style="margin-top:12px"></div>
+        <div id="stageLegend" style="margin-top:12px"></div>
+      </div>
+      <div class="card" id="baselineCard">
+        <h3>W01 基线诊断（不设达标线）</h3>
+        <div id="baseline"></div>
+      </div>
+    </section>
+
+    <!-- 2 课本同步 -->
+    <section class="view" id="view-books" aria-label="课本同步">
+      <div class="view-head">
+        <h2>课本同步</h2>
+        <p>九上 8 单元与课本附录入口；每周 1 单元，与 W01-W08 一一对应。</p>
+      </div>
+      <div class="notice info" id="bookNotice"></div>
+      <div class="grid grid-2" id="unitGrid"></div>
+      <div class="card">
+        <h3>课本附录入口</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th style="width:22%">附录</th><th style="width:28%">页码（据目录页转录）</th><th>用途</th></tr></thead>
+          <tbody id="appendixBody"></tbody>
+        </table></div>
+        <p class="tiny" style="margin-top:10px">以上页码来自教材目录页转录，非官方站点原文，以课本实物为准【待核实】。</p>
+      </div>
+    </section>
+
+    <!-- 3 专题复习 -->
+    <section class="view" id="view-topics" aria-label="专题复习">
+      <div class="view-head">
+        <h2>专题复习</h2>
+        <p>8 个专题与六板块内容清单，按省卷四板块与三条主线双向归类。</p>
+      </div>
+      <div class="grid grid-2" id="topicGrid"></div>
+      <div class="card">
+        <h3>六板块内容清单</h3>
+        <div id="blockList"></div>
+      </div>
+    </section>
+
+    <!-- 4 练测 -->
+    <section class="view" id="view-practice" aria-label="练测">
+      <div class="view-head">
+        <h2>练测</h2>
+        <p>分层练习、依据型答案解析、错题回炉、周六周测与模拟检测。</p>
+      </div>
+      <div class="card">
+        <div class="between">
+          <div class="row">
+            <span class="small muted">层级</span>
+            <div class="segmented" id="levelSwitch">
+              <button type="button" data-level="A" class="active">A 基础</button>
+              <button type="button" data-level="B">B 提升</button>
+              <button type="button" data-level="C">C 拓展</button>
+            </div>
+          </div>
+          <span class="tiny" id="practiceGate"></span>
+        </div>
+        <p class="tiny" style="margin:8px 0 0">题目均为原创示意题，非中考真题、非教材原文；四栏解析＝答案 / 依据类型 / 具体依据 / 易错提醒。</p>
+      </div>
+      <div id="questionList"></div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>周六周测</h3>
+          <div id="weeklyTest"></div>
+        </div>
+        <div class="card">
+          <h3>模拟检测</h3>
+          <div id="mockList"></div>
+          <p class="tiny" id="scoringNote" style="margin-top:8px"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 工具与交付 -->
+    <section class="view" id="view-tools" aria-label="工具与交付">
+      <div class="view-head">
+        <h2>工具与交付</h2>
+        <p>句型库、错词本、作文自查清单、周报与 A4 打印导出。</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>句型库（示范句）</h3>
+          <div id="sentenceBank"></div>
+          <p class="tiny" style="margin-top:8px">句型库主体按每单元从课本摘 2 句；示范句仅作格式参考【待核实：以课本对应单元原句为准】。</p>
+        </div>
+        <div class="card">
+          <h3>作文自查清单与批改量表</h3>
+          <div id="writingTools"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="between">
+          <h3 style="margin:0">错词本与复现队列</h3>
+          <button type="button" class="btn sm" id="btnAddWrong">加入一个示意错词</button>
+        </div>
+        <p class="tiny" id="wordbookRule"></p>
+        <div id="wordbook" style="margin-top:8px"></div>
+        <p class="tiny" id="recallRule" style="margin-top:10px"></p>
+      </div>
+      <div class="card">
+        <h3>【可直接印发】A4 导出清单</h3>
+        <p class="tiny">打印件由线上模块导出，不单独维护一套纸质稿；改一处不必重印整套。</p>
+        <div id="printList" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <h3>适用边界与限制</h3>
+        <ul class="clean small muted" id="boundaries"></ul>
+      </div>
+    </section>
+
+    <!-- 6 教师维护 -->
+    <section class="view" id="view-teacher" aria-label="教师维护">
+      <div class="view-head">
+        <h2>教师维护</h2>
+        <p>内容上下架、按生调三线分钟配比、解析可见范围、政策变更公告位。</p>
+      </div>
+      <div class="notice" id="teacherNotice"></div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>三线分钟配比</h3>
+          <p class="tiny" id="minutesNote"></p>
+          <div id="minutesEditor"></div>
+          <p class="small" style="margin-top:10px">合计：<b id="minutesTotal"></b> 分钟 / 日</p>
+        </div>
+        <div class="card">
+          <h3>解析可见范围</h3>
+          <div class="setting-row">
+            <span class="sname">学生端：提交后揭示答案</span>
+            <label class="check"><input type="checkbox" id="revealAfterSubmit" checked> 启用</label>
+          </div>
+          <p class="tiny" id="visibilityNote"></p>
+          <h4>政策变更公告位</h4>
+          <textarea id="announcement"></textarea>
+          <button type="button" class="btn sm primary" id="btnSaveAnnouncement" style="margin-top:8px">保存公告</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>内容上下架</h3>
+        <p class="tiny">关闭后对应模块在导航中显示为锁定，不改变设计稿模块范围。</p>
+        <div id="toggleList"></div>
+      </div>
+      <div class="card">
+        <h3>按板块错题分布（本周示意）</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>板块</th><th>卷面满分</th><th>本周错题数</th><th>错因归类提示</th></tr></thead>
+          <tbody id="wrongBoard"></tbody>
+        </table></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="print-root" aria-hidden="true"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
